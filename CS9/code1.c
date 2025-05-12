@@ -5,14 +5,15 @@
 #include <readline/history.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <wordexp.h>
+
 
 float num1, num2;
-// prototypes
+
 char *takeInput();
 void parseInput();
 void printHelp();
 void landingPage();
-
 
 int main()
 {
@@ -24,7 +25,6 @@ int main()
     }
     return 0;
 }
-
 
 void landingPage()
 {
@@ -116,25 +116,29 @@ void parseInput(char *input)
 
         else if (strcmp(token, "bacadong") == 0)
         {
-            char *args[256];
-            args[0] = "./bacadong";
+            char fullCommand[512] = "bacadong";
         
-            int i = 1;
-            while ((token = strtok(NULL, " ")) != NULL && i < 255) {
-                args[i++] = token;
+            char *next;
+            while ((next = strtok(NULL, "")) != NULL) {
+                strcat(fullCommand, " ");
+                strcat(fullCommand, next);
+                break; 
             }
-            args[i] = NULL;
+        
+            wordexp_t p;
+            wordexp(fullCommand, &p, 0);
         
             pid_t pid = fork();
             if (pid == 0) {
-                execv("./bacadong", args);
+                execv("./bacadong", p.we_wordv);
                 perror("exec failed");
                 exit(1);
             } else {
                 wait(NULL);
+                wordfree(&p);
             }
         }
-
+        
         else if (strcmp(token, "rahasiabanget") == 0)
         {
             char *args[256];
