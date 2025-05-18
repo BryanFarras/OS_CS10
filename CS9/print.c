@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
             return 0;
         } else {
             for (int i = 1; i < argc; i++) {
-                printf("%s ", argv[i]);
+                printf("ini di print: %s ", argv[i]);
             }
             printf("\n");
             return 0;

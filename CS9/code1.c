@@ -6,7 +6,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <wordexp.h>
-
+#include <signal.h>
 
 float num1, num2;
 
@@ -14,9 +14,13 @@ char *takeInput();
 void parseInput();
 void printHelp();
 void landingPage();
+void handle_sigint(int sig);
+void handle_sigtstp(int sig);
+void setup_signal_handlers();
 
 int main()
 {
+    setup_signal_handlers();
     landingPage();
     while (1)
     {
@@ -24,6 +28,25 @@ int main()
         parseInput(input);
     }
     return 0;
+}
+
+void handle_sigint(int sig) {
+    printf("\nbro masih menggunakan CTRL+C, ketik 'exit' buat keluar: Yo\n");
+    rl_on_new_line();
+    rl_replace_line("", 0);
+    rl_redisplay();
+}
+
+void handle_sigtstp(int sig) {
+    printf("\nShell tidak bisa di-suspend pakai Ctrl+Z! Gurt\n");
+    rl_on_new_line();
+    rl_replace_line("", 0);
+    rl_redisplay();
+}
+
+void setup_signal_handlers() {
+    signal(SIGINT, handle_sigint); 
+    signal(SIGTSTP, handle_sigtstp); 
 }
 
 void landingPage()
@@ -44,6 +67,37 @@ void landingPage()
     return;
 }
 
+void executeWithPipe(char *cmd1[], char *cmd2[]) {
+    int fd[2];
+    pipe(fd);
+    pid_t pid1 = fork();
+
+    if (pid1 == 0) {
+        // Proses pertama (left side)
+        dup2(fd[1], STDOUT_FILENO);
+        close(fd[0]);
+        close(fd[1]);
+        execv(cmd1[0], cmd1);
+        perror("exec1 failed");
+        exit(1);
+    }
+
+    pid_t pid2 = fork();
+    if (pid2 == 0) {
+        // Proses kedua (right side)
+        dup2(fd[0], STDIN_FILENO);
+        close(fd[0]);
+        close(fd[1]);
+        execv(cmd2[0], cmd2);
+        perror("exec2 failed");
+        exit(1);
+    }
+
+    close(fd[0]);
+    close(fd[1]);
+    waitpid(pid1, NULL, 0);
+    waitpid(pid2, NULL, 0);
+}
 
 // take input
 char *takeInput()
@@ -57,12 +111,40 @@ char *takeInput()
     };
 }
 
-
 // parse input
-void parseInput(char *input)
-{
-    if (strcmp(input, "exit") == 0)
-        exit(0);
+void parseInput(char *input) {
+    if (strchr(input, '|') != NULL) {
+        char *left = strtok(input, "|");
+        char *right = strtok(NULL, "|");
+
+        char *cmd1[100], *cmd2[100];
+        int i = 0;
+
+        char *tok = strtok(left, " \n");
+        while (tok != NULL) {
+            cmd1[i++] = tok;
+            tok = strtok(NULL, " \n");
+        }
+        cmd1[i] = NULL;
+
+        i = 0;
+        tok = strtok(right, " \n");
+        while (tok != NULL) {
+            cmd2[i++] = tok;
+            tok = strtok(NULL, " \n");
+        }
+        cmd2[i] = NULL;
+
+        // Ganti nama command jadi ./<command>
+        char fullpath1[256], fullpath2[256];
+        snprintf(fullpath1, sizeof(fullpath1), "./%s", cmd1[0]);
+        snprintf(fullpath2, sizeof(fullpath2), "./%s", cmd2[0]);
+        cmd1[0] = fullpath1;
+        cmd2[0] = fullpath2;
+
+        executeWithPipe(cmd1, cmd2);
+        return;
+    }
     else if (strlen(input) != 0)
     {
         add_history(input);
